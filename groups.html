@@ -47,6 +47,7 @@
       </div>
       <button onclick="renderNow()">🔍 عرض الفترة الحالية</button>
       <button class="secondary" onclick="renderTodayPeriods()">📋 عرض فترات اليوم</button>
+      <button class="secondary" onclick="renderWeekPeriods()">🗓️ عرض فترات الأسبوع</button>
     </div>
     <div id="resultWrap"></div>
   </div>
@@ -142,6 +143,55 @@
     }
     wrap.innerHTML = '<div class="subtitle">📋 فترات ' + today.dayAr + ' ' + today.date + ' — جماعة ' + jam + '</div>' +
       '<table><thead><tr><th>الفترة</th><th>التوقيت</th><th>المادة</th><th>اسم الموضوع</th><th>المدرس</th><th>القاعة</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+  }
+
+  // 🗓️ يعرض كل فترات الأسبوع الحالي (من السبت إلى الجمعة) لهذه الجماعة
+  function renderWeekPeriods() {
+    updateClock();
+    const jam = parseInt(jamSelect.value);
+    const wrap = document.getElementById('resultWrap');
+    if (!jam) { wrap.innerHTML = ''; return; }
+    const now = new Date();
+    // بداية الأسبوع = السبت (getDay: 6 = السبت)
+    const diffToSat = (now.getDay() + 1) % 7;
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToSat);
+    const currentInfo = getCurrentPeriodInfo();
+    let rowsHtml = '';
+    let anyDay = false;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+      const dateStr = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+      const dayAr = DAY_NAMES_AR[d.getDay()];
+      if (HOLIDAYS[dateStr]) {
+        rowsHtml += '<tr><td colspan="6" style="background:#fee2e2">🎌 ' + dayAr + ' ' + dateStr + ': اليوم عطلة رسمية — ' + HOLIDAYS[dateStr] + '</td></tr>';
+        continue;
+      }
+      const dayHasRecords = RECORDS.some(r => r.date === dateStr);
+      if (!dayHasRecords) continue;
+      anyDay = true;
+      for (let p = 1; p <= PERIOD_TIMES.length; p++) {
+        const startStr = PERIOD_TIMES[p-1] || '';
+        let timeLabel = '';
+        if (startStr) {
+          const parts = startStr.split(':').map(Number);
+          timeLabel = startStr + ' - ' + fmtTimeLocal(parts[0]*60 + parts[1] + PERIOD_DURATION);
+        }
+        const isNow = currentInfo && !currentInfo.error && currentInfo.date === dateStr && currentInfo.period === p;
+        const rec = RECORDS.find(r => r.date === dateStr && r.period === p && r.jam === jam);
+        const rowClass = isNow ? ' class="now-row"' : '';
+        if (rec) {
+          rowsHtml += '<tr' + rowClass + '><td>' + dayAr + '<br>' + dateStr + '</td><td>' + p + (isNow ? ' 🟢 الآن' : '') + '</td><td>' + timeLabel + '</td><td>' + (rec.subject||'') + '</td><td>' + (rec.topic||'') + '</td><td>' + rec.teacher + '</td><td>' + rec.hall + '</td></tr>';
+        } else {
+          rowsHtml += '<tr' + rowClass + '><td>' + dayAr + '<br>' + dateStr + '</td><td>' + p + (isNow ? ' 🟢 الآن' : '') + '</td><td>' + timeLabel + '</td><td colspan="4" style="color:#888">لا توجد محاضرة مثبتة فى هذه الفترة</td></tr>';
+        }
+      }
+    }
+    if (!anyDay && !rowsHtml) {
+      wrap.innerHTML = '<div class="empty">⚠️ لا يوجد جدول دراسى مسجَّل لهذا الأسبوع على هذا الجهاز</div>';
+      return;
+    }
+    wrap.innerHTML = '<div class="subtitle">🗓️ فترات الأسبوع الحالى — جماعة ' + jam + '</div>' +
+      '<table><thead><tr><th>اليوم</th><th>الفترة</th><th>التوقيت</th><th>المادة</th><th>اسم الموضوع</th><th>المدرس</th><th>القاعة</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
   }
 
   // ═══════════════════════════════════════════════════════════
