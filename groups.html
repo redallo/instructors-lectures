@@ -39,10 +39,11 @@
     </div>
     <div class="scope">النطاق: الأسبوع 5 (2026-08-08 إلى 2026-08-12)</div>
     <div class="clock" id="clockLine"></div>
+    <div id="upcomingBanner" style="display:none;text-align:center;background:#fef9c3;color:#854d0e;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-weight:700"></div>
     <div class="row">
       <div>
         <label>الجماعة</label>
-        <select id="jamSelect" onchange="renderNow()"></select>
+        <select id="jamSelect" onchange="renderNow(); resetNotifyState();"></select>
       </div>
       <button onclick="renderNow()">🔍 عرض الفترة الحالية</button>
       <button class="secondary" onclick="renderTodayPeriods()">📋 عرض فترات اليوم</button>
@@ -143,8 +144,54 @@
       '<table><thead><tr><th>الفترة</th><th>التوقيت</th><th>المادة</th><th>اسم الموضوع</th><th>المدرس</th><th>القاعة</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // ⏰ تنبيه بالمحاضرة القادمة قبل بدئها بـ 10 دقائق
+  // ═══════════════════════════════════════════════════════════
+  const NOTIFY_MINUTES_BEFORE = 10;
+  let _notifiedKey = null; // يمنع تكرار نفس التنبيه
+
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    try { Notification.requestPermission(); } catch(e) {}
+  }
+
+  function resetNotifyState() { _notifiedKey = null; }
+
+  function checkUpcomingLecture() {
+    const banner = document.getElementById('upcomingBanner');
+    const jam = parseInt(jamSelect.value);
+    if (!jam) { banner.style.display = 'none'; return; }
+    const today = getTodayInfo();
+    if (today.error) { banner.style.display = 'none'; return; }
+    const now = new Date();
+    const nowMins = now.getHours()*60 + now.getMinutes();
+    for (let p = 1; p <= PERIOD_TIMES.length; p++) {
+      const startStr = PERIOD_TIMES[p-1];
+      if (!startStr) continue;
+      const parts = startStr.split(':').map(Number);
+      const startMins = parts[0]*60 + parts[1];
+      const diff = startMins - nowMins;
+      if (diff > 0 && diff <= NOTIFY_MINUTES_BEFORE) {
+        const rec = RECORDS.find(r => r.date === today.date && r.period === p && r.jam === jam);
+        if (!rec) continue;
+        const notifyKey = today.date + '|' + p + '|' + jam;
+        const msg = '⏰ تبدأ محاضرة "' + (rec.subject||'') + (rec.topic ? (' - ' + rec.topic) : '') + '" للجماعة ' + jam + ' بعد ' + diff + ' دقيقة (مع ' + rec.teacher + ' - ' + rec.hall + ')';
+        banner.style.display = 'block';
+        banner.textContent = msg;
+        if (_notifiedKey !== notifyKey) {
+          _notifiedKey = notifyKey;
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try { new Notification('تنبيه محاضرة قادمة', { body: msg }); } catch(e) {}
+          }
+        }
+        return;
+      }
+    }
+    banner.style.display = 'none';
+  }
+
   updateClock();
-  setInterval(updateClock, 30000);
+  checkUpcomingLecture();
+  setInterval(function(){ updateClock(); checkUpcomingLecture(); }, 30000);
   jamSelect.selectedIndex = 0;
   renderNow();
 </script>
